@@ -208,17 +208,12 @@ class RisingOSBot:
             await self.application.initialize()
             await self.application.start()
             
-            # Start polling in non-blocking mode
-            await self.application.updater.start_polling()
-            
-            # Keep the application running
-            await self.application.updater.idle()
+            # Start polling and keep the bot running
+            await self.application.run_polling(allowed_updates=Update.ALL_TYPES)
             
         except Exception as e:
             print(f"Startup error: {e}")
             # Ensure proper cleanup
-            if hasattr(self.application, 'updater'):
-                await self.application.updater.stop()
             await self.application.stop()
             await self.application.shutdown()
             raise e
