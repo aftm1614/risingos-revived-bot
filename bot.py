@@ -22,6 +22,10 @@ if not CHANNEL_ID:
 if not ALLOWED_USER_IDS:
     raise ValueError("ALLOWED_USER_IDS environment variable is required")
 
+async def handle_health_check(request):
+    """Handle health check requests"""
+    return web.Response(text='Bot is running!')
+
 class RisingOSBot:
     def __init__(self):
         self.application = Application.builder().token(BOT_TOKEN).build()
@@ -30,7 +34,7 @@ class RisingOSBot:
         
         # Setup web app for health checks
         self.web_app = web.Application()
-        self.web_app.router.add_get('/', self.handle_health_check)
+        self.web_app.router.add_get('/', handle_health_check)
 
     async def id_command(self, update: Update, context: CallbackContext):
         """Handle /id command"""
@@ -141,28 +145,29 @@ class RisingOSBot:
         except Exception as e:
             raise Exception(f"Failed to send announcement: {str(e)}")
 
-    async def start_webhook(self):
-        """Start the web server"""
-        app = web.Application()
-        app.router.add_get('/', self.handle_health_check)
-        runner = web.AppRunner(app)
+    async def start(self):
+        """Start both the webhook server and the bot"""
+        # Start the webhook server
+        runner = web.AppRunner(self.web_app)
         await runner.setup()
-        self.site = web.TCPSite(runner, '0.0.0.0', int(os.environ.get('PORT', 8080)))
-        await self.site.start()
+        port = int(os.environ.get('PORT', 8080))
+        site = web.TCPSite(runner, '0.0.0.0', port)
+        await site.start()
+        print(f"🌐 Webhook running on port {port}")
 
-    async def handle_health_check(self, request):
-        """Handle health check requests"""
-        return web.Response(text='Bot is running!')
-
-    async def run(self):
-        """Run both the bot and web server"""
-        await self.start_webhook()
+        # Start the bot
         print("🤖 Bot is running...")
-        await self.application.run_polling()
+        await self.application.initialize()
+        await self.application.start()
+        await self.application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 async def main():
     bot = RisingOSBot()
-    await bot.run()
+    try:
+        await bot.start()
+    except Exception as e:
+        print(f"Error: {e}")
+        raise e
 
 if __name__ == "__main__":
     asyncio.run(main()) 
