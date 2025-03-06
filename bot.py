@@ -51,98 +51,133 @@ class RisingOSBot:
 
     async def post_command(self, update: Update, context: CallbackContext):
         """Handle /post command"""
-        user_id = update.effective_user.id
-        print(f"Received command from user ID: {user_id}")
-        print(f"Allowed IDs (from env): {ALLOWED_USER_IDS}")
-        print(f"Type of user_id: {type(user_id)}")
-        print(f"Type of allowed IDs: {[type(id) for id in ALLOWED_USER_IDS]}")
-        
-        # Check if user is authorized
-        if user_id not in ALLOWED_USER_IDS:
-            await update.message.reply_text(
-                f"❌ You are not authorized to use this bot.\n"
-                f"Your ID: {user_id}\n"
-                f"Allowed IDs: {ALLOWED_USER_IDS}"
-            )
-            return
-
-        if not context.args:
-            await update.message.reply_text("❌ Please provide a device codename.\nUsage: /post <codename>")
-            return
-
-        codename = context.args[0].lower()
-        
         try:
+            user_id = update.effective_user.id
+            print(f"Received /post command from user ID: {user_id}")
+            print(f"Allowed IDs (from env): {ALLOWED_USER_IDS}")
+            
+            # Check if user is authorized
+            if user_id not in ALLOWED_USER_IDS:
+                await update.message.reply_text(
+                    f"❌ You are not authorized to use this bot.\n"
+                    f"Your ID: {user_id}\n"
+                    f"Allowed IDs: {ALLOWED_USER_IDS}"
+                )
+                return
+
+            if not context.args:
+                await update.message.reply_text("❌ Please provide a device codename.\nUsage: /post <codename>")
+                return
+
+            codename = context.args[0].lower()
+            print(f"Fetching data for device: {codename}")
+            
+            # Fetch devices data from URL
+            print(f"Fetching from URL: {DEVICES_JSON_URL}")
             response = requests.get(DEVICES_JSON_URL)
             response.raise_for_status()
             devices = response.json()
+            print(f"Found {len(devices)} devices in total")
             
+            # Find device with matching codename
             device_data = None
             for device in devices:
                 if device['codename'].lower() == codename:
                     device_data = device
+                    print(f"Found matching device: {device['codename']}")
                     break
             
             if device_data:
+                print("Sending announcement...")
                 await self.send_announcement(device_data)
                 await update.message.reply_text(f"✅ Posted announcement for {device_data['codename']}")
             else:
                 await update.message.reply_text(f"❌ Device '{codename}' not found in devices list")
                 
         except requests.RequestException as e:
+            print(f"Request error: {e}")
             await update.message.reply_text(f"❌ Error fetching devices data: {str(e)}")
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            print(f"JSON parse error: {e}")
             await update.message.reply_text("❌ Error parsing devices data!")
         except Exception as e:
+            print(f"Unexpected error in post_command: {e}")
             await update.message.reply_text(f"❌ Error: {str(e)}")
 
     async def send_announcement(self, device_data):
         """Send formatted announcement to Telegram channel"""
         try:
-            # Format file size
-            size_gb = device_data['filesize'] / (1024 * 1024 * 1024)
-            
             # Format date
             build_date = datetime.fromtimestamp(device_data['timestamp']).strftime("%d %B %Y")
             
-            # Create inline keyboard with buttons
+            def escape_markdown(text):
+                """Helper function to escape special characters"""
+                special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+                for char in special_chars:
+                    text = str(text).replace(char, f"\\{char}")
+                return text
+            
+            # Escape all text fields
+            device_name = escape_markdown(device_data['device'])
+            oem_name = escape_markdown(device_data['oem'])
+            maintainer_name = escape_markdown(device_data['maintainer'])
+            version = escape_markdown(device_data['version'])
+            buildtype = escape_markdown(device_data['buildtype'])
+            codename = escape_markdown(device_data['codename'])
+            build_date = escape_markdown(build_date)
+            
+            # Create base keyboard with website and download buttons
             keyboard = [
                 [
                     InlineKeyboardButton("📱 Official Website", url="https://risingosrevived.tech/"),
                     InlineKeyboardButton("⬇️ Download Page", url=f"https://risingosrevived.tech/downloads.html?codename={device_data['codename']}")
-                ],
-                [
-                    InlineKeyboardButton("💬 Support Group", url=f"https://t.me/RisingOS{device_data['codename']}"),
-                    InlineKeyboardButton("📝 Changelog", url=device_data['device_changelog'])
                 ]
             ]
             
-            if device_data['paypal']:
+            # Add support group and changelog buttons if available
+            second_row = []
+            if device_data.get('telegram'):
+                second_row.append(InlineKeyboardButton("💬 Support Group", url=device_data['telegram']))
+            else:
+                second_row.append(InlineKeyboardButton("💬 Support Group", url=f"https://t.me/RisingOS{device_data['codename']}"))
+                
+            if device_data.get('device_changelog'):
+                second_row.append(InlineKeyboardButton("📝 Changelog", url=device_data['device_changelog']))
+            
+            if second_row:
+                keyboard.append(second_row)
+            
+            # Add PayPal button if available
+            if device_data.get('paypal'):
                 keyboard.append([InlineKeyboardButton("☕️ Support Maintainer", url=device_data['paypal'])])
 
             reply_markup = InlineKeyboardMarkup(keyboard)
             
-            message = f"""
-🚀 *New RisingOS-Revived Update Available!*
-
-📱 *Device:* {device_data['oem']} {device_data['device']} ({device_data['codename']})
-👨‍💻 *Maintainer:* {device_data['maintainer']}
-📦 *Version:* {device_data['version']}
-🔧 *Build Type:* {device_data['buildtype']}
-📅 *Build Date:* {build_date}
-
-#ROR #{device_data['codename']} #{device_data['version']} #fifteen
-"""
+            message = (
+                "🚀 *New RisingOS\\-Revived Update Available\\!*\n\n"
+                f"📱 *Device:* {oem_name} {device_name} \\({codename}\\)\n"
+                f"👨‍💻 *Maintainer:* {maintainer_name}\n"
+                f"📦 *Version:* {version}\n"
+                f"🔧 *Build Type:* {buildtype}\n"
+                f"📅 *Build Date:* {build_date}\n\n"
+                f"\\#ROR \\#{codename} \\#{version} \\#fifteen"
+            )
             
+            print("Sending message to channel...")
+            print(f"Channel ID: {CHANNEL_ID}")
+            
+            # Send photo with caption and buttons
             await self.application.bot.send_photo(
                 chat_id=CHANNEL_ID,
                 photo="https://raw.githubusercontent.com/RisingOS-Revived-devices/portal/main/banner.png",
                 caption=message,
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=ParseMode.MARKDOWN_V2,
                 reply_markup=reply_markup
             )
+            print("Message sent successfully")
             
         except Exception as e:
+            print(f"Error in send_announcement: {e}")
             raise Exception(f"Failed to send announcement: {str(e)}")
 
     async def start(self):
