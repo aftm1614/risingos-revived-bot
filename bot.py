@@ -147,27 +147,47 @@ class RisingOSBot:
 
     async def start(self):
         """Start both the webhook server and the bot"""
-        # Start the webhook server
-        runner = web.AppRunner(self.web_app)
-        await runner.setup()
-        port = int(os.environ.get('PORT', 8080))
-        site = web.TCPSite(runner, '0.0.0.0', port)
-        await site.start()
-        print(f"🌐 Webhook running on port {port}")
+        try:
+            # Start the webhook server
+            runner = web.AppRunner(self.web_app)
+            await runner.setup()
+            port = int(os.environ.get('PORT', 8080))
+            site = web.TCPSite(runner, '0.0.0.0', port)
+            await site.start()
+            print(f"🌐 Webhook running on port {port}")
 
-        # Start the bot
-        print("🤖 Bot is running...")
-        await self.application.initialize()
-        await self.application.start()
-        await self.application.run_polling(allowed_updates=Update.ALL_TYPES)
+            # Start the bot
+            print("🤖 Bot is running...")
+            await self.application.initialize()
+            await self.application.start()
+            
+            # Start polling in non-blocking mode
+            await self.application.updater.start_polling()
+            
+            # Keep the application running
+            await self.application.updater.idle()
+            
+        except Exception as e:
+            print(f"Startup error: {e}")
+            # Ensure proper cleanup
+            if hasattr(self.application, 'updater'):
+                await self.application.updater.stop()
+            await self.application.stop()
+            await self.application.shutdown()
+            raise e
 
 async def main():
     bot = RisingOSBot()
     try:
         await bot.start()
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Fatal error: {e}")
         raise e
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nBot stopped by user")
+    except Exception as e:
+        print(f"Fatal error: {e}") 
