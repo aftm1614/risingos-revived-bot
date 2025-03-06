@@ -47,6 +47,8 @@ class RisingOSBot:
         # Setup web app for health checks
         self.web_app = web.Application()
         self.web_app.router.add_get('/', handle_health_check)
+        self.runner = None
+        self.site = None
 
     async def id_command(self, update: Update, context: CallbackContext):
         """Handle /id command"""
@@ -192,44 +194,51 @@ class RisingOSBot:
             print(f"Error in send_announcement: {e}")
             raise Exception(f"Failed to send announcement: {str(e)}")
 
-    async def start(self):
-        """Start both the webhook server and the bot"""
-        try:
-            # Start the webhook server
-            runner = web.AppRunner(self.web_app)
-            await runner.setup()
-            port = int(os.environ.get('PORT', 8080))
-            site = web.TCPSite(runner, '0.0.0.0', port)
-            await site.start()
-            print(f"🌐 Webhook running on port {port}")
+    async def setup_webhook(self):
+        """Setup and start the webhook server"""
+        self.runner = web.AppRunner(self.web_app)
+        await self.runner.setup()
+        port = int(os.environ.get('PORT', 8080))
+        self.site = web.TCPSite(self.runner, '0.0.0.0', port)
+        await self.site.start()
+        print(f"🌐 Webhook running on port {port}")
 
+    async def run(self):
+        """Run both the webhook server and the bot"""
+        try:
+            # Setup the webhook
+            await self.setup_webhook()
+            
             # Start the bot
             print("🤖 Bot is running...")
-            await self.application.initialize()
-            await self.application.start()
-            
-            # Start polling and keep the bot running
-            await self.application.run_polling(allowed_updates=Update.ALL_TYPES)
-            
+            async with self.application:
+                await self.application.start()
+                await self.application.run_polling(allowed_updates=Update.ALL_TYPES)
+                
         except Exception as e:
-            print(f"Startup error: {e}")
-            # Ensure proper cleanup
-            await self.application.stop()
-            await self.application.shutdown()
+            print(f"Error during execution: {e}")
+            if self.runner:
+                await self.runner.cleanup()
             raise e
 
-async def main():
+def main():
+    """Main function to run the bot"""
     bot = RisingOSBot()
+    
+    # Setup event loop
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
     try:
-        await bot.start()
-    except Exception as e:
-        print(f"Fatal error: {e}")
-        raise e
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
+        loop.run_until_complete(bot.run())
     except KeyboardInterrupt:
         print("\nBot stopped by user")
     except Exception as e:
-        print(f"Fatal error: {e}") 
+        print(f"Fatal error: {e}")
+    finally:
+        # Cleanup
+        loop.run_until_complete(loop.shutdown_asyncgens())
+        loop.close()
+
+if __name__ == "__main__":
+    main() 
