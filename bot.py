@@ -5,10 +5,10 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import CommandHandler, CallbackContext, Application
 from datetime import datetime
+from aiohttp import web
+import asyncio
 
-# Rest of your code remains the same
-
-# Bot configuration
+# Bot configuration from environment variables
 BOT_TOKEN = os.environ.get('BOT_TOKEN', '')
 CHANNEL_ID = os.environ.get('CHANNEL_ID', '')
 ALLOWED_USER_IDS = [int(id.strip()) for id in os.environ.get('ALLOWED_USER_IDS', '').split(',') if id.strip()]
@@ -22,22 +22,46 @@ if not CHANNEL_ID:
 if not ALLOWED_USER_IDS:
     raise ValueError("ALLOWED_USER_IDS environment variable is required")
 
-
 class RisingOSBot:
     def __init__(self):
         self.application = Application.builder().token(BOT_TOKEN).build()
-        
-        # Add command handler
         self.application.add_handler(CommandHandler('post', self.post_command))
+        self.application.add_handler(CommandHandler('id', self.id_command))
+        
+        # Setup web app for health checks
+        self.web_app = web.Application()
+        self.web_app.router.add_get('/', self.handle_health_check)
+
+    async def id_command(self, update: Update, context: CallbackContext):
+        """Handle /id command"""
+        user_id = update.effective_user.id
+        env_value = os.environ.get('ALLOWED_USER_IDS', '')
+        await update.message.reply_text(
+            f"Your Telegram ID: `{user_id}`\n"
+            f"Current allowed IDs: `{ALLOWED_USER_IDS}`\n"
+            f"Raw env value: `{env_value}`\n"
+            f"Type of your ID: `{type(user_id)}`\n"
+            f"Type of allowed IDs: `{[type(id) for id in ALLOWED_USER_IDS]}`",
+            parse_mode=ParseMode.MARKDOWN
+        )
 
     async def post_command(self, update: Update, context: CallbackContext):
         """Handle /post command"""
+        user_id = update.effective_user.id
+        print(f"Received command from user ID: {user_id}")
+        print(f"Allowed IDs (from env): {ALLOWED_USER_IDS}")
+        print(f"Type of user_id: {type(user_id)}")
+        print(f"Type of allowed IDs: {[type(id) for id in ALLOWED_USER_IDS]}")
+        
         # Check if user is authorized
-        if update.effective_user.id not in ALLOWED_USER_IDS:
-            await update.message.reply_text("❌ You are not authorized to use this bot.")
+        if user_id not in ALLOWED_USER_IDS:
+            await update.message.reply_text(
+                f"❌ You are not authorized to use this bot.\n"
+                f"Your ID: {user_id}\n"
+                f"Allowed IDs: {ALLOWED_USER_IDS}"
+            )
             return
 
-        # Check if device codename was provided
         if not context.args:
             await update.message.reply_text("❌ Please provide a device codename.\nUsage: /post <codename>")
             return
@@ -45,12 +69,10 @@ class RisingOSBot:
         codename = context.args[0].lower()
         
         try:
-            # Fetch devices data from URL
             response = requests.get(DEVICES_JSON_URL)
             response.raise_for_status()
             devices = response.json()
             
-            # Find device with matching codename
             device_data = None
             for device in devices:
                 if device['codename'].lower() == codename:
@@ -96,7 +118,6 @@ class RisingOSBot:
 
             reply_markup = InlineKeyboardMarkup(keyboard)
             
-            # Send single post with banner and message
             message = f"""
 🚀 *New RisingOS-Revived Update Available!*
 
@@ -109,7 +130,6 @@ class RisingOSBot:
 #ROR #{device_data['codename']} #{device_data['version']} #fifteen
 """
             
-            # Send photo with caption and buttons
             await self.application.bot.send_photo(
                 chat_id=CHANNEL_ID,
                 photo="https://raw.githubusercontent.com/RisingOS-Revived-devices/portal/main/banner.png",
@@ -121,14 +141,28 @@ class RisingOSBot:
         except Exception as e:
             raise Exception(f"Failed to send announcement: {str(e)}")
 
-    def run(self):
-        """Run the bot"""
-        print("🤖 Bot is running...")
-        self.application.run_polling()
+    async def start_webhook(self):
+        """Start the web server"""
+        app = web.Application()
+        app.router.add_get('/', self.handle_health_check)
+        runner = web.AppRunner(app)
+        await runner.setup()
+        self.site = web.TCPSite(runner, '0.0.0.0', int(os.environ.get('PORT', 8080)))
+        await self.site.start()
 
-def main():
+    async def handle_health_check(self, request):
+        """Handle health check requests"""
+        return web.Response(text='Bot is running!')
+
+    async def run(self):
+        """Run both the bot and web server"""
+        await self.start_webhook()
+        print("🤖 Bot is running...")
+        await self.application.run_polling()
+
+async def main():
     bot = RisingOSBot()
-    bot.run()
+    await bot.run()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main()) 
