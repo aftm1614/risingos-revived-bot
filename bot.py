@@ -8,11 +8,23 @@ from datetime import datetime
 from aiohttp import web
 import asyncio
 
-# Bot configuration from environment variables
-BOT_TOKEN = os.environ.get('BOT_TOKEN', '')
-CHANNEL_ID = os.environ.get('CHANNEL_ID', '')
-ALLOWED_USER_IDS = [int(id.strip()) for id in os.environ.get('ALLOWED_USER_IDS', '').split(',') if id.strip()]
+# Debug print environment variables
+print("Environment Variables:")
+print(f"BOT_TOKEN exists: {'BOT_TOKEN' in os.environ}")
+print(f"CHANNEL_ID exists: {'CHANNEL_ID' in os.environ}")
+print(f"ALLOWED_USER_IDS exists: {'ALLOWED_USER_IDS' in os.environ}")
+
+# Bot configuration from environment variables with fallbacks
+BOT_TOKEN = os.environ.get('BOT_TOKEN', '6760432925:AAF1QtMjdIHQKIPWGM_1PFQBqN4htFOkWXI')
+CHANNEL_ID = os.environ.get('CHANNEL_ID', '-1002226931868')
+ALLOWED_USER_IDS = [int(id.strip()) for id in os.environ.get('ALLOWED_USER_IDS', '7013293652').split(',') if id.strip()]
 DEVICES_JSON_URL = os.environ.get('DEVICES_JSON_URL', 'https://raw.githubusercontent.com/RisingOS-Revived-devices/portal/refs/heads/main/devices.json')
+
+# Print configured values (excluding BOT_TOKEN for security)
+print("\nConfigured Values:")
+print(f"CHANNEL_ID: {CHANNEL_ID}")
+print(f"ALLOWED_USER_IDS: {ALLOWED_USER_IDS}")
+print(f"DEVICES_JSON_URL: {DEVICES_JSON_URL}")
 
 # Validate required environment variables
 if not BOT_TOKEN:
