@@ -140,23 +140,28 @@ async def send_announcement(bot, device_data):
         print(f"Error in send_announcement: {e}")
         raise Exception(f"Failed to send announcement: {str(e)}")
 
-async def main():
+def main():
     """Start the bot"""
-    print("🤖 Starting bot...")
+    # Create application
     application = Application.builder().token(BOT_TOKEN).build()
     
     # Add handlers
     application.add_handler(CommandHandler('post', post_command))
     application.add_handler(CommandHandler('id', id_command))
     
-    # Start the bot
-    await application.initialize()
-    await application.start()
-    print("🤖 Bot is running!")
-    
-    # Run the bot until the user presses Ctrl-C
-    await application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Start polling
+    print("🤖 Starting bot...")
+    application.run_polling(
+        drop_pending_updates=True,
+        allowed_updates=Update.ALL_TYPES,
+        close_loop=False
+    )
+    print("🤖 Bot stopped!")
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main()) 
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nBot stopped by user")
+    except Exception as e:
+        print(f"Fatal error: {e}") 
