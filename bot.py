@@ -5,8 +5,6 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import CommandHandler, CallbackContext, Application
 from datetime import datetime
-from aiohttp import web
-import asyncio
 
 # Debug print environment variables
 print("Environment Variables:")
@@ -14,29 +12,17 @@ print(f"BOT_TOKEN exists: {'BOT_TOKEN' in os.environ}")
 print(f"CHANNEL_ID exists: {'CHANNEL_ID' in os.environ}")
 print(f"ALLOWED_USER_IDS exists: {'ALLOWED_USER_IDS' in os.environ}")
 
-# Bot configuration from environment variables with fallbacks
-BOT_TOKEN = os.environ.get('BOT_TOKEN', '6760432925:AAF1QtMjdIHQKIPWGM_1PFQBqN4htFOkWXI')
-CHANNEL_ID = os.environ.get('CHANNEL_ID', '-1002226931868')
+# Bot configuration from environment variables
+BOT_TOKEN = os.environ.get('BOT_TOKEN', '7249842228:AAHvSzm_27cDSiuS9Z23ovXOx1fye12QFXA')
+CHANNEL_ID = os.environ.get('CHANNEL_ID', '-1002398759197')
 ALLOWED_USER_IDS = [int(id.strip()) for id in os.environ.get('ALLOWED_USER_IDS', '7013293652').split(',') if id.strip()]
 DEVICES_JSON_URL = os.environ.get('DEVICES_JSON_URL', 'https://raw.githubusercontent.com/RisingOS-Revived-devices/portal/refs/heads/main/devices.json')
 
-# Print configured values (excluding BOT_TOKEN for security)
+# Print configured values
 print("\nConfigured Values:")
 print(f"CHANNEL_ID: {CHANNEL_ID}")
 print(f"ALLOWED_USER_IDS: {ALLOWED_USER_IDS}")
 print(f"DEVICES_JSON_URL: {DEVICES_JSON_URL}")
-
-# Validate required environment variables
-if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN environment variable is required")
-if not CHANNEL_ID:
-    raise ValueError("CHANNEL_ID environment variable is required")
-if not ALLOWED_USER_IDS:
-    raise ValueError("ALLOWED_USER_IDS environment variable is required")
-
-async def handle_health_check(request):
-    """Handle health check requests"""
-    return web.Response(text='Bot is running!')
 
 class RisingOSBot:
     def __init__(self):
@@ -188,44 +174,33 @@ class RisingOSBot:
             print(f"Error in send_announcement: {e}")
             raise Exception(f"Failed to send announcement: {str(e)}")
 
-async def run_webhook():
-    """Run the webhook server"""
-    app = web.Application()
-    app.router.add_get('/', handle_health_check)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', int(os.environ.get('PORT', 8080)))
-    await site.start()
-    return runner
+    async def run(self):
+        """Run the bot"""
+        print("🤖 Starting bot...")
+        await self.application.initialize()
+        await self.application.start()
+        print("🤖 Bot is running!")
+        await self.application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True, close_loop=False)
 
-async def main():
-    """Main function to run both the webhook and bot"""
-    # Initialize the bot
+def main():
+    """Start the bot"""
+    import asyncio
     bot = RisingOSBot()
     
     try:
-        # Start webhook
-        runner = await run_webhook()
-        print("🌐 Webhook running on port", os.environ.get('PORT', 8080))
-
-        # Start bot
-        print("🤖 Bot is running...")
-        await bot.application.initialize()
-        await bot.application.start()
-        await bot.application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
-
-    except Exception as e:
-        print(f"Error: {e}")
-        if runner:
-            await runner.cleanup()
-        if bot.application.running:
-            await bot.application.stop()
-        raise e
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
+        # Create and set event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # Run the bot
+        loop.run_until_complete(bot.run())
+        loop.run_forever()
     except KeyboardInterrupt:
         print("\nBot stopped by user")
     except Exception as e:
-        print(f"Fatal error: {e}") 
+        print(f"Fatal error: {e}")
+    finally:
+        loop.close()
+
+if __name__ == "__main__":
+    main() 
