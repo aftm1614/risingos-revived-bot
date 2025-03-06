@@ -5,6 +5,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import CommandHandler, CallbackContext, Application
 from datetime import datetime
+from telegram.error import Conflict, NetworkError
 
 # Debug print environment variables
 print("Environment Variables:")
@@ -148,23 +149,44 @@ async def send_announcement(bot, device_data):
         print(f"Error in send_announcement: {e}")
         raise Exception(f"Failed to send announcement: {str(e)}")
 
+async def error_handler(update: Update, context: CallbackContext) -> None:
+    """Handle errors in the dispatcher."""
+    print(f"Error occurred: {context.error}")
+    if isinstance(context.error, Conflict):
+        print("Conflict error: Another instance of the bot is running")
+    elif isinstance(context.error, NetworkError):
+        print("Network error occurred")
+    else:
+        print(f"Unexpected error: {context.error}")
+
 def main():
     """Start the bot"""
-    # Create application
-    application = Application.builder().token(BOT_TOKEN).build()
-    
-    # Add handlers
-    application.add_handler(CommandHandler('post', post_command))
-    application.add_handler(CommandHandler('id', id_command))
-    
-    # Start polling
-    print("🤖 Starting bot...")
-    application.run_polling(
-        drop_pending_updates=True,
-        allowed_updates=Update.ALL_TYPES,
-        close_loop=False
-    )
-    print("🤖 Bot stopped!")
+    try:
+        # Create application with specific defaults
+        application = Application.builder().token(BOT_TOKEN).build()
+        
+        # Add handlers
+        application.add_handler(CommandHandler('post', post_command))
+        application.add_handler(CommandHandler('id', id_command))
+        
+        # Add error handler
+        application.add_error_handler(error_handler)
+        
+        # Start polling with specific settings
+        print("🤖 Starting bot...")
+        application.run_polling(
+            drop_pending_updates=True,
+            allowed_updates=Update.ALL_TYPES,
+            close_loop=False,
+            read_timeout=30,
+            write_timeout=30,
+            pool_timeout=30,
+            connect_timeout=30
+        )
+        
+    except Exception as e:
+        print(f"Fatal error: {e}")
+        raise e
 
 if __name__ == "__main__":
     try:
