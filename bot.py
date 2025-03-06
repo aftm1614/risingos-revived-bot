@@ -9,10 +9,19 @@ from datetime import datetime
 # Rest of your code remains the same
 
 # Bot configuration
-BOT_TOKEN = '6760432925:AAF1QtMjdIHQKIPWGM_1PFQBqN4htFOkWXI'
-CHANNEL_ID = '-1002226931868'
-ALLOWED_USER_IDS = [7013293652]  # Add Telegram user IDs who can use the bot
-DEVICES_JSON_URL = 'https://raw.githubusercontent.com/RisingOS-Revived-devices/portal/refs/heads/main/devices.json'
+BOT_TOKEN = os.environ.get('BOT_TOKEN', '')
+CHANNEL_ID = os.environ.get('CHANNEL_ID', '')
+ALLOWED_USER_IDS = [int(id.strip()) for id in os.environ.get('ALLOWED_USER_IDS', '').split(',') if id.strip()]
+DEVICES_JSON_URL = os.environ.get('DEVICES_JSON_URL', 'https://raw.githubusercontent.com/RisingOS-Revived-devices/portal/refs/heads/main/devices.json')
+
+# Validate required environment variables
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN environment variable is required")
+if not CHANNEL_ID:
+    raise ValueError("CHANNEL_ID environment variable is required")
+if not ALLOWED_USER_IDS:
+    raise ValueError("ALLOWED_USER_IDS environment variable is required")
+
 
 class RisingOSBot:
     def __init__(self):
